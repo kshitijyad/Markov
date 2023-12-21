@@ -1,3 +1,6 @@
 hmmlearn
 yfinance
 plotly
+matplotlib
+tqdm
+scipy

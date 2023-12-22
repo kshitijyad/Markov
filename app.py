@@ -159,6 +159,26 @@ def calculate_max_drawdown(portfolio_values):
     return max_drawdown
 st.title("Stock Market Analysis Using Hidden Markov Models")
 
+st.markdown('''
+## How to Use the Stock Market Analysis App
+
+Welcome to the Stock Market Analysis App, leveraging Hidden Markov Models (HMMs) to provide insights into stock market trends and behaviors. Here's how to get started:
+
+1. **Select Stock and Date Range**: Choose the stock symbol (e.g., 'SPY') and specify the start and end dates for analysis.
+2. **Training and Metrics**: Set a training end date for the HMM and select metrics like 'Adjusted Close', 'Volume', etc.
+3. **Hidden Markov Model Analysis**: Define the number of hidden states (n_components) in the HMM to analyze market states.
+4. **Backtesting Parameters**: Choose 'Buy States' where you'd ideally invest, and input the initial cash for strategy testing.
+5. **Monte Carlo Simulation**: Set parameters like window size, time intervals, and iterations for future price simulations.
+6. **Run Analysis**: Click "Run Analysis" to view market state predictions, backtesting results, and future price simulations.
+
+Remember, this tool is for informational purposes and not financial advice.
+
+For more on HMMs, visit [Wikipedia](https://en.wikipedia.org/wiki/Hidden_Markov_model).
+For financial data analysis, check out [yfinance](https://pypi.org/project/yfinance/).
+
+---
+''', unsafe_allow_html=True)
+
 @st.cache_data
 def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, n_components):
     data = yf.download(stock, start=start_date, end=end_date, period="1mo")

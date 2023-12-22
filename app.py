@@ -201,28 +201,72 @@ def markov_model(data):
 
     # Plot the simulation
     import plotly.graph_objects as go
-
+    last_date = data.index[-1]
+    date_range = pd.date_range(last_date, periods=t_intervals, freq='D')
+    hovertemplate = 'Date: %{x}<br>Price: %{y:.2f}'
     # Assuming 'price_list' contains all the simulated paths and 'confidence_interval' contains the percentile data
 
     fig = go.Figure()
     price_paths = price_list.T  
     # Plot each simulated path
-    for single_path in price_paths:
-        fig.add_trace(go.Scatter(y=single_path, mode='lines', line=dict(width=0.5, color='yellow'), opacity=0.5, showlegend=False))
+    for i, single_path in enumerate(price_paths):
+        fig.add_trace(go.Scatter(
+            x=date_range,
+            y=single_path,
+            mode='lines',
+            line=dict(width=0.5, color='yellow'),
+            opacity=0.5,
+            hoverinfo='x+y',
+            hovertemplate=hovertemplate,
+            showlegend=False
+        ))
 
     # Plot the confidence intervals
-    fig.add_trace(go.Scatter(y=confidence_interval[0], mode='lines', line=dict(color='red', dash='dash'), name='10% Percentile'))
-    fig.add_trace(go.Scatter(y=confidence_interval[1], mode='lines', line=dict(color='blue', dash='dash'), name='50% Percentile'))
-    fig.add_trace(go.Scatter(y=confidence_interval[2], mode='lines', line=dict(color='green', dash='dash'), name='90% Percentile'))
+    fig.add_trace(go.Scatter(
+        x=date_range,
+        y=confidence_interval[0],
+        mode='lines',
+        line=dict(color='red', dash='dash'),
+        name='10% Percentile',
+        hoverinfo='x+y',
+        hovertemplate=hovertemplate
+    ))
+    fig.add_trace(go.Scatter(
+        x=date_range,
+        y=confidence_interval[1],
+        mode='lines',
+        line=dict(color='blue', dash='dash'),
+        name='50% Percentile',
+        hoverinfo='x+y',
+        hovertemplate=hovertemplate
+    ))
+    fig.add_trace(go.Scatter(
+        x=date_range,
+        y=confidence_interval[2],
+        mode='lines',
+        line=dict(color='green', dash='dash'),
+        name='90% Percentile',
+        hoverinfo='x+y',
+        hovertemplate=hovertemplate
+    ))
 
     # Update the layout of the figure
     fig.update_layout(
-        title=f'Simulated {stock} Price Paths with Confidence Intervals',
-        xaxis_title='Time Intervals',
-        yaxis_title='Price',
-        legend_title='Legend',
-        template='plotly_white'
+    title=f'Simulated {stock} Price Paths with Confidence Intervals',
+    xaxis_title='Date',
+    yaxis_title='Price',
+    legend_title='Legend',
+    template='plotly_white',
+    xaxis=dict(
+        tickangle=-45,  # Rotate the labels to avoid crowding
+        type='date',  # Specify the axis type as date
+        dtick=round(t_intervals/10) * 86400000.0,  # Set dtick to a fraction of the total interval, 86400000 is one day in milliseconds
+        tickformat='%b %d, %Y',  # Optional: Adjust the date format as needed
+        ticklabelmode="period"  # This makes the grid lines and labels align with periods, not the exact dates
     )
+)
+
+    # Use Streamlit's plotly_chart function to display the figure
     # Use Streamlit's pyplot function to display the figure
     st.plotly_chart(fig)
 

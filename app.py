@@ -160,7 +160,7 @@ def calculate_max_drawdown(portfolio_values):
 st.title("Stock Market Analysis Using Hidden Markov Models")
 
 st.markdown('''
-## How to Use the Stock Market Analysis App
+### How to Use the Stock Market Analysis App
 
 Welcome to the Stock Market Analysis App, leveraging Hidden Markov Models (HMMs) to provide insights into stock market trends and behaviors. Here's how to get started:
 

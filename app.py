@@ -9,6 +9,26 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tqdm import tqdm
 import seaborn as sns
+from PIL import Image
+import base64
+
+image_path = "images/kshitij.png"
+
+def get_image_base64(path):
+    with open(path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+# URL to link to
+link_url = "https://www.linkedin.com/in/kshitijyad/"
+
+encoded_image = get_image_base64(image_path)
+html_code = f"""
+    <a href="{link_url}" target="_blank">
+        <img src="data:image/jpeg;base64,{encoded_image}" alt="Clickable Image" style="width:100%">
+    </a>
+"""
+
+# Display the clickable image in the sidebar
+st.sidebar.markdown(html_code, unsafe_allow_html=True)
 
 def get_contrasting_colors(n):
     """Generate 'n' contrasting colors."""

@@ -481,8 +481,9 @@ if st.button("Run Analysis"):
         """
 
         st.markdown(html_template.format(title="Trading Strategy", total_return=total_return, max_dd=max_dd_trading*100, cagr=cagr_trading*100), unsafe_allow_html=True)
+        st.write("*Change value of 'Buy State' filter if results are negative")
         st.markdown(html_template.format(title="Buy and Hold Strategy", total_return=buy_and_hold_return, max_dd=max_dd_buy_hold*100, cagr=cagr_buy_hold*100), unsafe_allow_html=True)
-
+        
 
 
 

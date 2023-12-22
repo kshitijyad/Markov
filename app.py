@@ -164,12 +164,75 @@ def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, 
     for state in range(n_components):
         state_data = data_aligned[data_aligned['Predicted_State'] == state]
         fig.add_trace(go.Scatter(x=state_data.index, y=state_data['Adj Close'], mode='markers', marker=dict(color=colors[state], size=5), name=f'State {state}'))
-    fig.update_layout(title='Stock Adjusted Close Prices with Market States', xaxis_title='Date', yaxis_title='Adjusted Close Price', hovermode='x unified')
+    fig.update_layout(title=f'{stock} Adjusted Close Prices with Market States', xaxis_title='Date', yaxis_title='Adjusted Close Price', hovermode='x unified')
 
     # Display the Plotly figure in Streamlit
     st.plotly_chart(fig)
     return data_aligned,data
 
+def markov_model(data):
+    log_returns = np.log(1 + data[['Adj Close']].pct_change())
+
+    # Running mean and variance (e.g., over the last 60 days)
+
+    running_u = log_returns.rolling(window=window).mean()
+    running_var = log_returns.rolling(window=window).var()
+
+    # Parameters for simulation
+
+    # Initialize price list array
+    # Extracting the last closing price as a scalar value
+    S0 = data['Close'].iloc[-1]
+    price_list = np.zeros((t_intervals, iterations))
+    price_list[0] = S0
+
+    # Monte Carlo simulation with running mean and variance
+    for t in tqdm(range(1, t_intervals)):
+        if t < window:
+            drift = running_u.iloc[window] - (0.5 * running_var.iloc[window])
+            stdev = np.sqrt(running_var.iloc[window])
+        else:
+            drift = running_u.iloc[t] - (0.5 * running_var.iloc[t])
+            stdev = np.sqrt(running_var.iloc[t])
+        daily_returns = np.exp(drift.values + stdev.values * norm.ppf(np.random.rand(iterations)))
+        price_list[t] = price_list[t - 1] * daily_returns
+
+    confidence_interval = np.percentile(price_list, [10, 50, 90], axis=1)
+
+    # Plot the simulation
+    import plotly.graph_objects as go
+
+    # Assuming 'price_list' contains all the simulated paths and 'confidence_interval' contains the percentile data
+
+    fig = go.Figure()
+    price_paths = price_list.T  
+    # Plot each simulated path
+    for single_path in price_paths:
+        fig.add_trace(go.Scatter(y=single_path, mode='lines', line=dict(width=0.5, color='yellow'), opacity=0.5, showlegend=False))
+
+    # Plot the confidence intervals
+    fig.add_trace(go.Scatter(y=confidence_interval[0], mode='lines', line=dict(color='red', dash='dash'), name='10% Percentile'))
+    fig.add_trace(go.Scatter(y=confidence_interval[1], mode='lines', line=dict(color='blue', dash='dash'), name='50% Percentile'))
+    fig.add_trace(go.Scatter(y=confidence_interval[2], mode='lines', line=dict(color='green', dash='dash'), name='90% Percentile'))
+
+    # Update the layout of the figure
+    fig.update_layout(
+        title=f'Simulated {stock} Price Paths with Confidence Intervals',
+        xaxis_title='Time Intervals',
+        yaxis_title='Price',
+        legend_title='Legend',
+        template='plotly_white'
+    )
+    # Use Streamlit's pyplot function to display the figure
+    st.plotly_chart(fig)
+
+    # Calculate and display Value at Risk (VaR) at 95% confidence level
+    VaR_95 = np.percentile(price_list[-1] - S0, 1)
+    print(f"Value at Risk (95% confidence): {VaR_95}")
+
+    # Calculate and display Expected Shortfall (ES)
+    ES = price_list[-1][price_list[-1] - S0 < VaR_95].mean() - S0
+    print(f"Expected Shortfall: {ES}")
 def initialize_state():
     st.write("Initializing")
     if 'stock' not in st.session_state:
@@ -188,6 +251,12 @@ def initialize_state():
         st.session_state['buy_state'] = [1]
     if 'initial_cash' not in st.session_state:
         st.session_state['initial_cash'] = 10000.0
+    if 'window' not in st.session_state:
+        st.session_state['window'] = 150
+    if 't_intervals' not in st.session_state:
+        st.session_state['t_intervals'] = 365
+    if 'iterations' not in st.session_state:
+        st.session_state['iterations'] = 1000
 
 initialize_state()
 
@@ -200,6 +269,12 @@ with st.sidebar:
     n_components = st.number_input("Number of Components", min_value=1, max_value=10, value=2)
     buy_state = st.multiselect("Buy States", list(range(10)), default=[1])
     initial_cash = st.number_input("Initial Cash", value=10000.0)
+    st.divider()
+    window = st.number_input("Window", min_value=1, value=st.session_state['window'])
+    t_intervals = st.number_input("Time Intervals", min_value=1, value=st.session_state['t_intervals'])
+    iterations = st.number_input("Iterations", min_value=1, value=st.session_state['iterations'])
+
+
     
 # Check if filter values have changed
 filters_changed = (
@@ -211,6 +286,9 @@ filters_changed = (
     n_components != st.session_state['n_components'] or
     buy_state != st.session_state['buy_state'] or
     initial_cash != st.session_state['initial_cash']
+    or window != st.session_state['window']
+    or t_intervals != st.session_state['t_intervals']
+    or iterations != st.session_state['iterations']
 )
 
 if filters_changed:
@@ -224,7 +302,9 @@ if filters_changed:
     st.session_state['n_components'] = n_components
     st.session_state['buy_state'] = buy_state
     st.session_state['initial_cash'] = initial_cash
-
+    st.session_state['window'] = window
+    st.session_state['t_intervals'] = t_intervals
+    st.session_state['iterations'] = iterations
     # Rerun the script
     st.experimental_rerun()
 
@@ -233,6 +313,8 @@ data_aligned, data = fetch_and_process_data(stock, start_date, end_date, trainin
     
 if st.button("Run Analysis"):
     
+    st.divider()
+    markov_model(data)
     st.divider()
     total_return, cash_positions = calculate_hmm_trading_returns(initial_cash, data_aligned.dropna(), buy_state)
 

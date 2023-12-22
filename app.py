@@ -357,7 +357,7 @@ def initialize_state():
     if 'initial_cash' not in st.session_state:
         st.session_state['initial_cash'] = 10000.0
     if 'window' not in st.session_state:
-        st.session_state['window'] = 150
+        st.session_state['window'] = 365
     if 't_intervals' not in st.session_state:
         st.session_state['t_intervals'] = 365
     if 'iterations' not in st.session_state:

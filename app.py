@@ -157,10 +157,7 @@ def calculate_max_drawdown(portfolio_values):
     # Maximum drawdown
     max_drawdown = np.max(drawdown)
     return max_drawdown
-st.title("Stock Market Analysis Using HMM")
-
-
-    
+st.title("Stock Market Analysis Using Hidden Markov Models")
 
 @st.cache_data
 def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, n_components):
@@ -510,4 +507,10 @@ if st.button("Run Analysis"):
         # Show the figure
         st.plotly_chart(fig)
 
+disclaimer = """
+---
+#### Disclaimer
+The information provided in this application is for general informational purposes only. It is not intended as financial advice, investment guidance, or a recommendation of any particular strategy or investment. All users should perform their own due diligence and consult with a qualified financial advisor before making any investment decisions. The developers and creators of this application are not responsible for any financial losses or gains incurred as a result of using this application.
+"""
 
+st.markdown(disclaimer, unsafe_allow_html=True)

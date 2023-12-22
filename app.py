@@ -355,6 +355,8 @@ with st.sidebar:
     training_date = st.date_input("Training End Date", value=pd.to_datetime("2018-01-01"))
     metrics = st.multiselect("Metrics", ['Adj Close', 'Open', 'High', 'Low', 'Close', 'Volume'], default=['Adj Close'])
     n_components = st.number_input("Number of Components", min_value=1, max_value=10, value=2)
+    st.divider()
+    st.text('For Backtesting')
     buy_state = st.multiselect("Buy States", list(range(10)), default=[1])
     initial_cash = st.number_input("Initial Cash", value=10000.0)
     st.divider()

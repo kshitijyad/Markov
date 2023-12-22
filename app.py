@@ -215,7 +215,7 @@ def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, 
     return data_aligned,data
 
 def markov_model(data):
-    with st.spinner("Calculating Markov Chains..."):
+    with st.spinner("Running Monte Carlo Simulation..."):
         log_returns = np.log(1 + data[['Adj Close']].pct_change())
 
         # Running mean and variance (e.g., over the last 60 days)
@@ -349,21 +349,42 @@ def initialize_state():
 initialize_state()
 
 with st.sidebar:
-    stock = st.text_input("Stock Symbol", value='SPY')
-    start_date = st.date_input("Start Date", value=pd.to_datetime("1995-07-10"))
-    end_date = st.date_input("End Date", value=pd.to_datetime("now"))
-    training_date = st.date_input("Training End Date", value=pd.to_datetime("2018-01-01"))
-    metrics = st.multiselect("Metrics", ['Adj Close', 'Open', 'High', 'Low', 'Close', 'Volume'], default=['Adj Close'])
-    n_components = st.number_input("Number of Components", min_value=1, max_value=10, value=2)
-    st.divider()
-    st.text('For Backtesting')
-    st.markdown('Please review the chart and choose a "Buy State". This selection should reflect the market condition where you consider it most opportune to make a purchase.')
-    buy_state = st.multiselect("Buy States", list(range(10)), default=[1])
-    initial_cash = st.number_input("Initial Cash", value=10000.0)
-    st.divider()
-    window = st.number_input("Window", min_value=1, value=st.session_state['window'])
-    t_intervals = st.number_input("Time Intervals", min_value=1, value=st.session_state['t_intervals'])
-    iterations = st.number_input("Iterations", min_value=1, value=st.session_state['iterations'])
+    st.sidebar.markdown("## Filter Settings")
+    st.sidebar.caption("Enter the ticker symbol of the stock you want to analyze (e.g., 'AAPL' for Apple Inc.).")
+    stock = st.sidebar.text_input("Stock Symbol", value='SPY')
+
+    st.sidebar.caption("Select the beginning date for the stock data analysis.")
+    start_date = st.sidebar.date_input("Start Date", value=pd.to_datetime("1995-07-10"))
+
+    st.sidebar.caption("Choose the ending date up to which you want to analyze the stock data.")
+    end_date = st.sidebar.date_input("End Date", value=pd.to_datetime("now"))
+
+    st.sidebar.caption("Set the cut-off date for training the Hidden Markov Model (HMM). Data up to this date will be used for training.")
+    training_date = st.sidebar.date_input("Training End Date", value=pd.to_datetime("2018-01-01"))
+
+    st.sidebar.caption("Choose the stock data metrics to analyze, such as 'Adjusted Close', 'Open', 'High', 'Low', 'Close', and 'Volume'.")
+    metrics = st.sidebar.multiselect("Metrics", ['Adj Close', 'Open', 'High', 'Low', 'Close', 'Volume'], default=['Adj Close'])
+
+    st.sidebar.caption("Specify the number of hidden states in the HMM. Each state represents a different pattern or regime in the stock's price movement.")
+    n_components = st.sidebar.number_input("Number of Components", min_value=1, max_value=10, value=2)
+
+    st.sidebar.markdown("## Backtesting Parameters")
+    st.sidebar.caption("Select the states in which you believe it's optimal to buy the stock. These are the states where the market conditions are considered favorable for purchasing.")
+    buy_state = st.sidebar.multiselect("Buy States", list(range(10)), default=[1])
+
+    st.sidebar.caption("Input the initial cash amount for backtesting the trading strategy.")
+    initial_cash = st.sidebar.number_input("Initial Cash", value=10000.0)
+   
+    st.sidebar.markdown("## Monte Carlo Simulation")
+    st.sidebar.caption("Set the window size for calculating the moving average and variance in the Monte Carlo simulation.")
+    window = st.sidebar.number_input("Window", min_value=1, value=150)
+
+    st.sidebar.caption("Choose the number of time intervals for projecting future stock prices in the simulation.")
+    t_intervals = st.sidebar.number_input("Time Intervals", min_value=1, value=365)
+
+    st.sidebar.caption("Determine the number of iterations for the Monte Carlo simulation to forecast future stock price movements.")
+    iterations = st.sidebar.number_input("Iterations", min_value=1, value=1000)
+
 
 
     

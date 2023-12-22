@@ -357,7 +357,7 @@ with st.sidebar:
     n_components = st.number_input("Number of Components", min_value=1, max_value=10, value=2)
     st.divider()
     st.text('For Backtesting')
-    st.markdown('Looking at the chart, please select "Buy State", that signifies when you would want to buy the market currently in that state')
+    st.markdown('Please review the chart and choose a "Buy State". This selection should reflect the market condition where you consider it most opportune to make a purchase.')
     buy_state = st.multiselect("Buy States", list(range(10)), default=[1])
     initial_cash = st.number_input("Initial Cash", value=10000.0)
     st.divider()

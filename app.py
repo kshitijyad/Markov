@@ -8,6 +8,12 @@ from scipy.stats import norm
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tqdm import tqdm
+import seaborn as sns
+
+def get_contrasting_colors(n):
+    """Generate 'n' contrasting colors."""
+    palette = sns.color_palette("Set3", n)
+    return [f'rgba({int(rgb[0]*255)}, {int(rgb[1]*255)}, {int(rgb[2]*255)}, 1)' for rgb in palette]
 
 def calculate_log_returns_and_training_data(data, metrics, training_end_date):
     """
@@ -29,7 +35,7 @@ def calculate_log_returns_and_training_data(data, metrics, training_end_date):
         if metric in data.columns:
             log_returns[metric] = np.log(1 + data[[metric]].pct_change())
         else:
-            print(f"Metric '{metric}' not found in data.")
+            st.write(f"Metric '{metric}' not found in data.")
 
     log_returns.dropna(inplace=True)
 
@@ -139,16 +145,33 @@ st.title("Stock Market Analysis Using HMM")
 @st.cache_data
 def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, n_components):
     data = yf.download(stock, start=start_date, end=end_date, period="1mo")
-    #st.experimental_rerun()
+    if data.empty:
+        st.error(f"No data available for {stock} in the specified date range.")
+        return None, None
+    first_trading_day = data.index.min()
+    if pd.to_datetime(training_date) < first_trading_day:
+        st.error(f"The first day of trading for {stock} is on {first_trading_day.strftime('%Y-%m-%d')}. "
+                 "Please adjust the training date to be on or after this date.")
+        return None, None
     #data=data.resample('D').ffill()
     combined_log_returns, training_data_reshaped = calculate_log_returns_and_training_data(data, metrics, training_date)
     combined_log_returns_reshaped = combined_log_returns.values
+    if training_data_reshaped.size == 0:
+        st.error("Insufficient data for training the model.")
+        return data, None
     model = hmm.GaussianHMM(n_components=n_components, covariance_type="diag", n_iter=100000)
     model.fit(np.array(training_data_reshaped).reshape(-1, 1))
 
     # Predict states for the entire dataset
     predicted_states = model.predict(combined_log_returns_reshaped)
-
+    state_probabilities = model.predict_proba(combined_log_returns_reshaped)
+    aligned_dates = data.index[len(data) - len(state_probabilities):]
+    latest_date = aligned_dates[-1].strftime('%Y-%m-%d')
+    latest_state_probabilities = state_probabilities[-1]
+    st.subheader(f"Latest State Probabilities for: {latest_date} ")
+    for i, prob in enumerate(latest_state_probabilities):
+        st.write(f"State {i} with Probability {np.round(prob,2)*100}% :")
+        st.progress(prob)
     # Transition matrix and means/variances of each state
     print("Transition matrix")
     print(model.transmat_)
@@ -160,7 +183,8 @@ def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, 
     data_aligned = data[len(data) - len(predicted_states):].assign(Predicted_State=predicted_states)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data_aligned.index, y=data_aligned['Adj Close'], line=dict(color='lightgrey'), name='Adjusted Close'))
-    colors = ['blue', 'green', 'red', 'cyan', 'magenta']
+    #colors = ['blue', 'green', 'red', 'cyan', 'magenta']
+    colors = get_contrasting_colors(n_components)
     for state in range(n_components):
         state_data = data_aligned[data_aligned['Predicted_State'] == state]
         fig.add_trace(go.Scatter(x=state_data.index, y=state_data['Adj Close'], mode='markers', marker=dict(color=colors[state], size=5), name=f'State {state}'))
@@ -171,114 +195,114 @@ def fetch_and_process_data(stock, start_date, end_date, training_date, metrics, 
     return data_aligned,data
 
 def markov_model(data):
-    log_returns = np.log(1 + data[['Adj Close']].pct_change())
+    with st.spinner("Calculating Markov Chains..."):
+        log_returns = np.log(1 + data[['Adj Close']].pct_change())
 
-    # Running mean and variance (e.g., over the last 60 days)
+        # Running mean and variance (e.g., over the last 60 days)
 
-    running_u = log_returns.rolling(window=window).mean()
-    running_var = log_returns.rolling(window=window).var()
+        running_u = log_returns.rolling(window=window).mean()
+        running_var = log_returns.rolling(window=window).var()
 
-    # Parameters for simulation
+        # Parameters for simulation
 
-    # Initialize price list array
-    # Extracting the last closing price as a scalar value
-    S0 = data['Close'].iloc[-1]
-    price_list = np.zeros((t_intervals, iterations))
-    price_list[0] = S0
+        # Initialize price list array
+        # Extracting the last closing price as a scalar value
+        S0 = data['Close'].iloc[-1]
+        price_list = np.zeros((t_intervals, iterations))
+        price_list[0] = S0
 
-    # Monte Carlo simulation with running mean and variance
-    for t in tqdm(range(1, t_intervals)):
-        if t < window:
-            drift = running_u.iloc[window] - (0.5 * running_var.iloc[window])
-            stdev = np.sqrt(running_var.iloc[window])
-        else:
-            drift = running_u.iloc[t] - (0.5 * running_var.iloc[t])
-            stdev = np.sqrt(running_var.iloc[t])
-        daily_returns = np.exp(drift.values + stdev.values * norm.ppf(np.random.rand(iterations)))
-        price_list[t] = price_list[t - 1] * daily_returns
+        # Monte Carlo simulation with running mean and variance
+        for t in tqdm(range(1, t_intervals)):
+            if t < window:
+                drift = running_u.iloc[window] - (0.5 * running_var.iloc[window])
+                stdev = np.sqrt(running_var.iloc[window])
+            else:
+                drift = running_u.iloc[t] - (0.5 * running_var.iloc[t])
+                stdev = np.sqrt(running_var.iloc[t])
+            daily_returns = np.exp(drift.values + stdev.values * norm.ppf(np.random.rand(iterations)))
+            price_list[t] = price_list[t - 1] * daily_returns
 
-    confidence_interval = np.percentile(price_list, [10, 50, 90], axis=1)
+        confidence_interval = np.percentile(price_list, [10, 50, 90], axis=1)
 
-    # Plot the simulation
-    import plotly.graph_objects as go
-    last_date = data.index[-1]
-    date_range = pd.date_range(last_date, periods=t_intervals, freq='D')
-    hovertemplate = 'Date: %{x}<br>Price: %{y:.2f}'
-    # Assuming 'price_list' contains all the simulated paths and 'confidence_interval' contains the percentile data
+        # Plot the simulation
+        import plotly.graph_objects as go
+        last_date = data.index[-1]
+        date_range = pd.date_range(last_date, periods=t_intervals, freq='D')
+        hovertemplate = 'Date: %{x}<br>Price: %{y:.2f}'
+        # Assuming 'price_list' contains all the simulated paths and 'confidence_interval' contains the percentile data
 
-    fig = go.Figure()
-    price_paths = price_list.T  
-    # Plot each simulated path
-    for i, single_path in enumerate(price_paths):
+        fig = go.Figure()
+        price_paths = price_list.T  
+        # Plot each simulated path
+        for i, single_path in enumerate(price_paths):
+            fig.add_trace(go.Scatter(
+                x=date_range,
+                y=single_path,
+                mode='lines',
+                line=dict(width=0.5, color='yellow'),
+                opacity=0.5,
+                hoverinfo='x+y',
+                hovertemplate=hovertemplate,
+                showlegend=False
+            ))
+
+        # Plot the confidence intervals
         fig.add_trace(go.Scatter(
             x=date_range,
-            y=single_path,
+            y=confidence_interval[0],
             mode='lines',
-            line=dict(width=0.5, color='yellow'),
-            opacity=0.5,
+            line=dict(color='red', dash='dash'),
+            name='10% Percentile',
             hoverinfo='x+y',
-            hovertemplate=hovertemplate,
-            showlegend=False
+            hovertemplate=hovertemplate
+        ))
+        fig.add_trace(go.Scatter(
+            x=date_range,
+            y=confidence_interval[1],
+            mode='lines',
+            line=dict(color='blue', dash='dash'),
+            name='50% Percentile',
+            hoverinfo='x+y',
+            hovertemplate=hovertemplate
+        ))
+        fig.add_trace(go.Scatter(
+            x=date_range,
+            y=confidence_interval[2],
+            mode='lines',
+            line=dict(color='green', dash='dash'),
+            name='90% Percentile',
+            hoverinfo='x+y',
+            hovertemplate=hovertemplate
         ))
 
-    # Plot the confidence intervals
-    fig.add_trace(go.Scatter(
-        x=date_range,
-        y=confidence_interval[0],
-        mode='lines',
-        line=dict(color='red', dash='dash'),
-        name='10% Percentile',
-        hoverinfo='x+y',
-        hovertemplate=hovertemplate
-    ))
-    fig.add_trace(go.Scatter(
-        x=date_range,
-        y=confidence_interval[1],
-        mode='lines',
-        line=dict(color='blue', dash='dash'),
-        name='50% Percentile',
-        hoverinfo='x+y',
-        hovertemplate=hovertemplate
-    ))
-    fig.add_trace(go.Scatter(
-        x=date_range,
-        y=confidence_interval[2],
-        mode='lines',
-        line=dict(color='green', dash='dash'),
-        name='90% Percentile',
-        hoverinfo='x+y',
-        hovertemplate=hovertemplate
-    ))
-
-    # Update the layout of the figure
-    fig.update_layout(
-    title=f'Simulated {stock} Price Paths with Confidence Intervals',
-    xaxis_title='Date',
-    yaxis_title='Price',
-    legend_title='Legend',
-    template='plotly_white',
-    xaxis=dict(
-        tickangle=-45,  # Rotate the labels to avoid crowding
-        type='date',  # Specify the axis type as date
-        dtick=round(t_intervals/10) * 86400000.0,  # Set dtick to a fraction of the total interval, 86400000 is one day in milliseconds
-        tickformat='%b %d, %Y',  # Optional: Adjust the date format as needed
-        ticklabelmode="period"  # This makes the grid lines and labels align with periods, not the exact dates
+        # Update the layout of the figure
+        fig.update_layout(
+        title=f'Simulated {stock} Price Paths with Confidence Intervals',
+        xaxis_title='Date',
+        yaxis_title='Price',
+        legend_title='Legend',
+        template='plotly_white',
+        xaxis=dict(
+            tickangle=-45,  # Rotate the labels to avoid crowding
+            type='date',  # Specify the axis type as date
+            dtick=round(t_intervals/10) * 86400000.0,  # Set dtick to a fraction of the total interval, 86400000 is one day in milliseconds
+            tickformat='%b %d, %Y',  # Optional: Adjust the date format as needed
+            ticklabelmode="period"  # This makes the grid lines and labels align with periods, not the exact dates
+        )
     )
-)
 
-    # Use Streamlit's plotly_chart function to display the figure
-    # Use Streamlit's pyplot function to display the figure
-    st.plotly_chart(fig)
+        # Use Streamlit's plotly_chart function to display the figure
+        # Use Streamlit's pyplot function to display the figure
+        st.plotly_chart(fig)
 
-    # Calculate and display Value at Risk (VaR) at 95% confidence level
-    VaR_95 = np.percentile(price_list[-1] - S0, 1)
-    print(f"Value at Risk (95% confidence): {VaR_95}")
+        # Calculate and display Value at Risk (VaR) at 95% confidence level
+        VaR_95 = np.percentile(price_list[-1] - S0, 1)
+        st.write(f"Value at Risk (95% confidence): {VaR_95}")
 
-    # Calculate and display Expected Shortfall (ES)
-    ES = price_list[-1][price_list[-1] - S0 < VaR_95].mean() - S0
-    print(f"Expected Shortfall: {ES}")
+        # Calculate and display Expected Shortfall (ES)
+        ES = price_list[-1][price_list[-1] - S0 < VaR_95].mean() - S0
+        st.write(f"Expected Shortfall: {ES}")
 def initialize_state():
-    st.write("Initializing")
     if 'stock' not in st.session_state:
         st.session_state['stock'] = 'SPY'
     if 'start_date' not in st.session_state:
@@ -360,83 +384,86 @@ if st.button("Run Analysis"):
     st.divider()
     markov_model(data)
     st.divider()
-    total_return, cash_positions = calculate_hmm_trading_returns(initial_cash, data_aligned.dropna(), buy_state)
+    with st.spinner("Backtesting..."):
+        total_return, cash_positions = calculate_hmm_trading_returns(initial_cash, data_aligned.dropna(), buy_state)
 
-    # Buy and Hold Strategy
-    max_dd_trading = calculate_max_drawdown(cash_positions)
+        # Buy and Hold Strategy
+        max_dd_trading = calculate_max_drawdown(cash_positions)
 
-    buy_and_hold_values = initial_cash / data['Adj Close'].iloc[0] * data['Adj Close']
-    buy_and_hold_return = (buy_and_hold_values.iloc[-1] / initial_cash - 1) * 100
-    max_dd_buy_hold = calculate_max_drawdown(buy_and_hold_values)
-
-
-    # Start and end dates for the investment
-    start_date = pd.to_datetime(data.index[0])
-    end_date = pd.to_datetime(data.index[-1])
-
-    # Calculate CAGR for the trading strategy
-    trading_end_value = cash_positions[-1]  # Final value of the portfolio
-    cagr_trading = calculate_cagr(initial_cash, trading_end_value, start_date, end_date)
-
-    # Calculate CAGR for the buy-and-hold strategy
-    buy_hold_start_value = initial_cash # Initial investment
-    buy_hold_end_value = buy_and_hold_values.iloc[-1]  # Final value of the investment
-    cagr_buy_hold = calculate_cagr(buy_hold_start_value, buy_hold_end_value, start_date, end_date)
-
-    html_template = """
-    <div style="background-color: black; padding: 10px; border-radius: 5px; margin: 10px 0;">
-        <h2 style="color: blue;">{title}</h2>
-        <ul>
-            <li><b>Total Return:</b> {total_return:.2f}%</li>
-            <li><b>Max Drawdown:</b> {max_dd:.2f}%</li>
-            <li><b>CAGR:</b> {cagr:.2f}%</li>
-        </ul>
-    </div>
-    """
-
-    st.markdown(html_template.format(title="Trading Strategy", total_return=total_return, max_dd=max_dd_trading*100, cagr=cagr_trading*100), unsafe_allow_html=True)
-    st.markdown(html_template.format(title="Buy and Hold Strategy", total_return=buy_and_hold_return, max_dd=max_dd_buy_hold*100, cagr=cagr_buy_hold*100), unsafe_allow_html=True)
+        buy_and_hold_values = initial_cash / data['Adj Close'].iloc[0] * data['Adj Close']
+        buy_and_hold_return = (buy_and_hold_values.iloc[-1] / initial_cash - 1) * 100
+        max_dd_buy_hold = calculate_max_drawdown(buy_and_hold_values)
 
 
+        # Start and end dates for the investment
+        start_date = pd.to_datetime(data.index[0])
+        end_date = pd.to_datetime(data.index[-1])
+
+        # Calculate CAGR for the trading strategy
+        trading_end_value = cash_positions[-1]  # Final value of the portfolio
+        cagr_trading = calculate_cagr(initial_cash, trading_end_value, start_date, end_date)
+
+        # Calculate CAGR for the buy-and-hold strategy
+        buy_hold_start_value = initial_cash # Initial investment
+        buy_hold_end_value = buy_and_hold_values.iloc[-1]  # Final value of the investment
+        cagr_buy_hold = calculate_cagr(buy_hold_start_value, buy_hold_end_value, start_date, end_date)
+
+        html_template = """
+        <div style="background-color: black; padding: 10px; border-radius: 5px; margin: 10px 0;">
+            <h2 style="color: blue;">{title}</h2>
+            <ul>
+                <li><b>Total Return:</b> {total_return:.2f}%</li>
+                <li><b>Max Drawdown:</b> {max_dd:.2f}%</li>
+                <li><b>CAGR:</b> {cagr:.2f}%</li>
+            </ul>
+        </div>
+        """
+
+        st.markdown(html_template.format(title="Trading Strategy", total_return=total_return, max_dd=max_dd_trading*100, cagr=cagr_trading*100), unsafe_allow_html=True)
+        st.markdown(html_template.format(title="Buy and Hold Strategy", total_return=buy_and_hold_return, max_dd=max_dd_buy_hold*100, cagr=cagr_buy_hold*100), unsafe_allow_html=True)
 
 
 
-    # Create a figure with two y-axes
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # Add the Adjusted Close Price line
-    fig.add_trace(
-        go.Scatter(x=data_aligned.index, y=data_aligned['Adj Close'], line=dict(color='lightgrey'), name='Adjusted Close'),
-        secondary_y=False
-    )
 
-    # Add markers for each state
-    colors = ['blue', 'green', 'red', 'cyan', 'magenta']
-    for state in range(n_components):
-        state_data = data_aligned[data_aligned['Predicted_State'] == state]
+        # Create a figure with two y-axes
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Add the Adjusted Close Price line
         fig.add_trace(
-            go.Scatter(x=state_data.index, y=state_data['Adj Close'], mode='markers', marker=dict(color=colors[state], size=5), name=f'State {state}'),
+            go.Scatter(x=data_aligned.index, y=data_aligned['Adj Close'], line=dict(color='lightgrey'), name='Adjusted Close'),
             secondary_y=False
         )
 
-    # Add a line for Cash/Position Value on secondary y-axis
-    fig.add_trace(
-        go.Scatter(x=data_aligned.index, y=cash_positions[1:], name='Cash/Position Value', line=dict(color='green')),
-        secondary_y=True
-    )
+        # Add markers for each state
+        #colors = ['blue', 'green', 'red', 'cyan', 'magenta']
+        colors = get_contrasting_colors(n_components)
 
-    # Update layout for a cleaner look
-    fig.update_layout(
-        title=f'{stock} Adjusted Close Prices with Market States and Cash/Position Value',
-        xaxis_title='Date',
-        hovermode='x unified'
-    )
+        for state in range(n_components):
+            state_data = data_aligned[data_aligned['Predicted_State'] == state]
+            fig.add_trace(
+                go.Scatter(x=state_data.index, y=state_data['Adj Close'], mode='markers', marker=dict(color=colors[state], size=5), name=f'State {state}'),
+                secondary_y=False
+            )
 
-    # Set y-axis titles
-    fig.update_yaxes(title_text='Adjusted Close Price', secondary_y=False)
-    fig.update_yaxes(title_text='Cash/Position Value', secondary_y=True)
+        # Add a line for Cash/Position Value on secondary y-axis
+        fig.add_trace(
+            go.Scatter(x=data_aligned.index, y=cash_positions[1:], name='Cash/Position Value', line=dict(color='green')),
+            secondary_y=True
+        )
 
-    # Show the figure
-    st.plotly_chart(fig)
+        # Update layout for a cleaner look
+        fig.update_layout(
+            title=f'{stock} Adjusted Close Prices with Market States and Cash/Position Value',
+            xaxis_title='Date',
+            hovermode='x unified'
+        )
+
+        # Set y-axis titles
+        fig.update_yaxes(title_text='Adjusted Close Price', secondary_y=False)
+        fig.update_yaxes(title_text='Cash/Position Value', secondary_y=True)
+
+        # Show the figure
+        st.plotly_chart(fig)
 
 

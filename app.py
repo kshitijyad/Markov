@@ -357,7 +357,7 @@ with st.sidebar:
     n_components = st.number_input("Number of Components", min_value=1, max_value=10, value=2)
     st.divider()
     st.text('For Backtesting')
-    buy_state = st.multiselect("Buy States", list(range(10)), default=[1])
+    buy_state = st.multiselect("Buy States (Select all the states from above when you want to buy)", list(range(10)), default=[1])
     initial_cash = st.number_input("Initial Cash", value=10000.0)
     st.divider()
     window = st.number_input("Window", min_value=1, value=st.session_state['window'])
